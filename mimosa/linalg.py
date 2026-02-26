@@ -5,8 +5,79 @@ and automatic differentiation features.
 """
 
 import jax.numpy as jnp
+import jax.scipy as jsp
 from jax import jit, vmap
 from jax.lax import cond, while_loop
+
+
+@jit
+def scatter_to_grid_1d(full, tensor, maps):
+	T = tensor.shape[0]
+	N = maps.shape[-1]
+	G = full.shape[0]
+	if maps.ndim == 1:
+		maps = jnp.broadcast_to(maps, (T, N))
+	middle = tensor.shape[1:-1]
+	flat_tensor = tensor.reshape(T, -1, N)  # (T, M, N)
+
+	@vmap
+	def scatter(t, m):  # t: (M, N), m: (N,)
+		return jnp.broadcast_to(full, (t.shape[0], G)).copy().at[:, m].set(t)
+
+	return scatter(flat_tensor, maps).reshape(T, *middle, G)
+
+
+@jit
+def scatter_to_grid_2d(full, tensor, maps):
+	"""
+	Scatters a tensor to a full tensor using mappings.
+
+	:param full: the matrix to scatter into, of shape (G, G)
+	:param tensor: the tensor to scatter, of shape (T, ..., N, N)
+	:param maps: the mappings to scatter with, of shape (T, N).
+	Each row contains the indices of the full matrix where the corresponding row of the tensor should be scattered.
+	:return: a tensor of shape (T, ..., G, G) where the values from the input tensor have been scattered to the full matrix according to the mappings.
+	"""
+	T = tensor.shape[0]
+	N = maps.shape[-1]
+	G = full.shape[0]
+	if maps.ndim == 1:
+		maps = jnp.broadcast_to(maps, (T, N))
+	middle = tensor.shape[1:-2]
+	flat_tensor = tensor.reshape(T, -1, N, N)
+
+	@vmap
+	def scatter(t, m):
+		i, j = m[:, None], m[None, :]
+		return jnp.broadcast_to(full, (t.shape[0], G, G)).copy().at[:, i, j].set(t)
+
+	return scatter(flat_tensor, maps).reshape(T, *middle, G, G)
+
+
+@jit
+def cho_factor(cov, jitter=1e-5):
+	"""
+	Wrapper around jax.scipy.linalg.cho_factor that adds jitter to the diagonal for numerical stability and only returns the array.
+
+	:param cov: covariance matrix to factor. Shape (..., N, N)
+	:param jitter: amount of jitter to add to the diagonal. Default is 1e-5.
+
+	:return: Cholesky upper factor of the covariance matrix. Shape (..., N, N)
+	"""
+	return jsp.linalg.cho_factor(cov + jitter * jnp.eye(cov.shape[-1]))[0]
+
+
+@jit
+def cho_solve(cov_u, res):
+	"""
+	Solves cov_u @ x = res for x, where cov_u is the Cholesky upper factor of a covariance matrix.
+	This is a wrapper around jax.scipy.linalg.cho_solve that always uses upper factorisation.
+
+	:param cov_u: covariance matrix to factor. Shape (..., N, N)
+	:param res: result to solve for. Shape (..., N, M)
+	:return: x. Shape (..., N, M)
+	"""
+	return jsp.linalg.cho_solve((cov_u, False), res)
 
 
 @jit
