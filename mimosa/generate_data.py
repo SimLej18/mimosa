@@ -284,19 +284,19 @@ def generate_data(
 
 	if shared_output_hps:
 		sample_outputs = vmap(lambda k, m, c: sample_gp(k, m, c[0]), in_axes=(0, 0, None))
-		if shared_task_hps:
+		if shared_inputs_in_tasks and shared_task_hps:
 			sample_tasks = vmap(lambda k, m, c: sample_outputs(k, m, c[0]), in_axes=(0, 0, None))
 		else:
 			sample_tasks = vmap(lambda k, m, c: sample_outputs(k, m, c), in_axes=(0, 0, 0))
 	else:
 		sample_outputs = vmap(lambda k, m, c: sample_gp(k, m, c), in_axes=(0, 0, 0))
-		if shared_task_hps:
+		if shared_inputs_in_tasks and shared_task_hps:
 			sample_tasks = vmap(lambda k, m, c: sample_outputs(k, m, c[0]), in_axes=(0, 0, None))
 		else:
 			sample_tasks = vmap(lambda k, m, c: sample_outputs(k, m, c), in_axes=(0, 0, 0))
 	key, subkey = jr.split(key)
 	subkeys = jr.split(subkey, (T, O))
 
-	outputs = sample_tasks(subkeys, task_means, task_covs).transpose(0, 2, 1)  # Shape (T, F*N, O)
+	outputs = sample_tasks(subkeys, task_means, task_covs).mT  # Shape (T, F*N, O)
 
 	return inputs, outputs, mappings, grid, mean_process_means, mean_process_covs, mean_processes, mixture, task_means, mean, mean_kernel, task_kernel
