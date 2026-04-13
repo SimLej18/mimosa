@@ -8,7 +8,7 @@ from equinox import filter_jit, combine
 def optimise_clusters(
 		clust_mean, clust_kern,
 		post_mean, post_cov, grid,
-		solver=optx.LBFGS(atol=1e-5, rtol=1e-5), jitter=jnp.array(1e-3),
+		solver=optx.LBFGS(atol=1e-4, rtol=1e-4), jitter=jnp.array(1e-3),
 		clust_mean_frozen=None, clust_kern_frozen=None):
 
 	@filter_jit
@@ -22,13 +22,13 @@ def optimise_clusters(
 	params = (clust_mean, clust_kern)
 	frozen = (clust_mean_frozen, clust_kern_frozen)
 
-	return optx.minimise(loss_fn, solver, params, frozen).value
+	return optx.minimise(loss_fn, solver, params, frozen, throw=False)
 
 @filter_jit
 def optimise_tasks(
 		task_kern,
 		inputs, outputs, mappings, post_mean, post_cov, mixture_coeffs,
-		solver=optx.LBFGS(atol=1e-5, rtol=1e-5), jitter=jnp.array(1e-3),
+		solver=optx.LBFGS(atol=1e-4, rtol=1e-4), jitter=jnp.array(1e-3),
 		task_kern_frozen=None):
 
 	@filter_jit
@@ -37,4 +37,4 @@ def optimise_tasks(
 
 		return (tasks_nlls(inputs, outputs, mappings, kern(inputs), post_mean, post_cov, jitter=jitter) * mixture_coeffs).sum()
 
-	return optx.minimise(loss_fn, solver, task_kern, task_kern_frozen).value
+	return optx.minimise(loss_fn, solver, task_kern, task_kern_frozen, throw=False)

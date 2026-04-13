@@ -3,7 +3,7 @@
 # Each configuration is run in a separate Python subprocess to avoid memory accumulation.
 #
 # Usage (from project root):
-#   bash tests/test_configurations.sh
+#   bash tests/test_generatedataconfigurations.sh
 #
 # Variables iterated (matching the notebook):
 #   sth  (shared_task_hps)       : true / false
