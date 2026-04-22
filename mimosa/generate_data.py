@@ -5,7 +5,8 @@ from typing import Tuple
 
 import equinox as eqx
 
-from kernax import BatchModule, AbstractKernel, AbstractMean, sample_hps_from_uniform_priors
+from kernax import BatchModule, AbstractKernel, AbstractMean
+from kernax.hp_sampling import sample_hps_from_uniform_priors
 from mimosa.linalg import compute_mapping
 from mimosa.sampling import sample_gp
 
