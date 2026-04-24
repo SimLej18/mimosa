@@ -6,7 +6,6 @@ from equinox import filter_jit
 from mimosa.linalg import cho_factor, cho_solve
 
 
-@filter_jit
 def mvn_nll(inputs: Array, values: Array, mean: Array, cov: Array, jitter=jnp.array(1e-5)):
 	"""
 	Negative log-likelihood of a multivariate normal distribution, that works on padded data and multi-outputs.
@@ -21,7 +20,8 @@ def mvn_nll(inputs: Array, values: Array, mean: Array, cov: Array, jitter=jnp.ar
 	"""
 	nan_mask = jnp.isnan(inputs[:, 0])
 
-	cov_u = jnp.where(nan_mask[None, :] | nan_mask[:, None], jnp.eye(cov.shape[-1])[None, :, :], cho_factor(cov, jitter=jitter))  # Shape (O, F*N, F*N), with O=1 if shared_outputs_hps
+	cov = jnp.where(nan_mask[None, :] | nan_mask[:, None], jnp.eye(cov.shape[-1])[None, :, :], cov)
+	cov_u = cho_factor(cov, jitter=jitter)  # Shape (O, F*N, F*N), with O=1 if shared_outputs_hps
 	diff = jnp.where(nan_mask, 0., values.T - mean)  # Shape (O, F*N)
 	y = cho_solve(jnp.broadcast_to(cov_u, (diff.shape[0], cov_u.shape[1], cov_u.shape[2])), diff)  # Shape (O, F*N)
 
@@ -32,7 +32,6 @@ def mvn_nll(inputs: Array, values: Array, mean: Array, cov: Array, jitter=jnp.ar
 	return 0.5 * (data_fit + penalty + constant)
 
 
-@jit
 def trace_correction(inputs: Array, cov: Array, post_cov: Array, jitter=jnp.array(1e-5)):
 	"""
 	Computes the trace correction term to adapt the negative log-likelihood of a MVN to the Magma algorithm. Works on padded data and multi-outputs.
@@ -46,9 +45,12 @@ def trace_correction(inputs: Array, cov: Array, post_cov: Array, jitter=jnp.arra
 	"""
 	nan_mask_1d = jnp.isnan(inputs[:, 0])
 	nan_mask_2d = nan_mask_1d[None, :] | nan_mask_1d[:, None]
+	eye = jnp.eye(cov.shape[-1])[None, :, :]
 
-	post_cov_u = jnp.where(nan_mask_2d, jnp.eye(cov.shape[-1])[None, :, :], cho_factor(post_cov, jitter=jitter))  # Shape (O, F*N, F*N), with O=1 if shared_outputs_hps
-	cov_u = jnp.where(nan_mask_2d, jnp.eye(cov.shape[-1])[None, :, :], cho_factor(cov, jitter=jitter))  # Shape (O, F*N, F*N), with O=1 if shared_outputs_hps
+	post_cov = jnp.where(nan_mask_2d, eye, post_cov)
+	post_cov_u = cho_factor(post_cov, jitter=jitter)  # Shape (O, F*N, F*N), with O=1 if shared_outputs_hps
+	cov = jnp.where(nan_mask_2d, eye, cov)
+	cov_u = cho_factor(cov, jitter=jitter)  # Shape (O, F*N, F*N), with O=1 if shared_outputs_hps
 
 	if cov_u.shape[0] > post_cov.shape[0]:
 		post_cov_u = jnp.broadcast_to(post_cov_u, cov_u.shape)
@@ -59,7 +61,6 @@ def trace_correction(inputs: Array, cov: Array, post_cov: Array, jitter=jnp.arra
 	return 0.5 * (jnp.sum(v**2, axis=(-2, -1)) - jnp.sum(nan_mask_1d))  # Shape (O,)
 
 
-@filter_jit
 def full_nll(inputs: Array, values: Array, mean: Array, cov: Array, post_cov: Array, jitter=jnp.array(1e-5)):
 	"""
 	Full negative log-likelihood of a mean process in the Magma algorithm, including the trace correction term. Works on padded data and multi-outputs.
@@ -76,7 +77,6 @@ def full_nll(inputs: Array, values: Array, mean: Array, cov: Array, post_cov: Ar
 	return mvn_nll(inputs, values, mean, cov, jitter=jitter) + trace_correction(inputs, cov, post_cov, jitter=jitter)
 
 
-@filter_jit
 def means_nlls(post_means: Array, post_covs: Array, grid: Array, cluster_means: Array, cluster_covs: Array, jitter=jnp.array(1e-5)):
 	"""
 	Computes the negative log-likelihood of every cluster, for each output
@@ -96,7 +96,6 @@ def means_nlls(post_means: Array, post_covs: Array, grid: Array, cluster_means: 
 	return vmap(full_nll, in_axes=(None, 0, 0, 0, 0, None))(grid, post_means.mT, cluster_means, cluster_covs, post_covs, jitter)
 
 
-@filter_jit
 def tasks_nlls(inputs: Array, outputs: Array, mappings: Array, task_covs: Array, post_means: Array, post_covs: Array, jitter=jnp.array(1e-5)):
 	"""
 	Computes the negative log-likelihood of every task, for each cluster, for each output

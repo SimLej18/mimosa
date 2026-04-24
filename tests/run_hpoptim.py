@@ -26,6 +26,7 @@ jax.config.update("jax_debug_nans", False)
 
 import jax.numpy as jnp
 import jax.random as jr
+import optimistix as optx
 
 from kernax import WhiteNoiseKernel, VarianceKernel, SEKernel, AffineMean
 from mimosa.generate_data import generate_data
@@ -110,12 +111,16 @@ def main():
 		p_m, p_c = hyperpost(inputs, outputs, maps, grid, mix_coeffs, m, m_k, t_k)
 
 		# Cluster optimisation
-		optimise_clusters(m, m_k, p_m, p_c, grid, jitter=jitter)
+		sol1 = optimise_clusters(m, m_k, p_m, p_c, grid, jitter=jitter)
+
+		assert optx.RESULTS[sol1.result] == '', optx.RESULTS[sol1.result]
 
 		# Mixture update + task optimisation
 		mix_proportions = jnp.ones((K,)) / K
 		new_mix_coeffs = update_mixture(inputs, outputs, maps, t_k, p_m, p_c, mix_proportions, jitter=jitter)
-		optimise_tasks(t_k, inputs, outputs, maps, p_m, p_c, new_mix_coeffs, jitter=jitter)
+		sol2 = optimise_tasks(t_k, inputs, outputs, maps, p_m, p_c, new_mix_coeffs, jitter=jitter)
+
+		assert optx.RESULTS[sol2.result] == '', optx.RESULTS[sol2.result]
 
 		print(f"OK - {config}")
 		sys.exit(0)
